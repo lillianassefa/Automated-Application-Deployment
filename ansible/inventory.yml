@@ -1,0 +1,14 @@
+---
+all:
+  hosts:
+    web_server:
+      ansible_host: "{{ lookup('env', 'INSTANCE_IP') | default('localhost', true) }}"
+      ansible_user: ubuntu
+      ansible_ssh_private_key_file: ~/.ssh/web-server-key.pem
+      ansible_ssh_common_args: '-o StrictHostKeyChecking=no'
+      ansible_python_interpreter: /usr/bin/python3
+      app_port: 5000
+      app_directory: /opt/flask_app
+  vars:
+    ansible_become: true
+    ansible_become_method: sudo

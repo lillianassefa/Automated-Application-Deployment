@@ -1,0 +1,102 @@
+---
+- name: Deploy Flask application
+  hosts: web_server
+  become: yes
+  vars:
+    app_port: 5000
+    app_directory: /opt/flask_app
+  tasks:
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Install Python and pip
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - python3
+        - python3-pip
+
+    - name: Install Flask
+      pip:
+        name: flask
+        executable: pip3
+
+    - name: Create application directory
+      file:
+        path: "{{ app_directory }}"
+        state: directory
+        mode: '0755'
+        owner: ubuntu
+        group: ubuntu
+
+    - name: Deploy Flask application
+      copy:
+        content: |
+          from flask import Flask
+          app = Flask(__name__)
+          
+          @app.route('/')
+          def hello():
+              return 'Hello from Lillian\'s Flask App!'
+          
+          if __name__ == '__main__':
+              app.run(host='0.0.0.0', port={{ app_port }})
+        dest: "{{ app_directory }}/app.py"
+        mode: '0644'
+        owner: ubuntu
+        group: ubuntu
+
+    - name: Create systemd service file
+      copy:
+        content: |
+          [Unit]
+          Description=Flask Application
+          After=network.target
+          
+          [Service]
+          ExecStart=/usr/bin/python3 {{ app_directory }}/app.py
+          WorkingDirectory={{ app_directory }}
+          Restart=always
+          User=ubuntu
+          Group=ubuntu
+          
+          [Install]
+          WantedBy=multi-user.target
+        dest: /etc/systemd/system/flask_app.service
+        mode: '0644'
+
+    - name: Reload systemd daemon
+      systemd:
+        daemon_reload: yes
+
+    - name: Enable and start Flask service
+      systemd:
+        name: flask_app
+        enabled: yes
+        state: started
+
+    - name: Wait for application to be ready
+      uri:
+        url: http://localhost:{{ app_port }}
+        status_code: 200
+      retries: 10
+      delay: 5
+      register: result
+      until: result.status == 200
+
+    - name: Display deployment information
+      debug:
+        msg: |
+          🎉 Flask application deployed successfully!
+          
+          Application Details:
+          - Port: {{ app_port }}
+          - Directory: {{ app_directory }}
+          - Service: flask_app.service
+          
+          Access your application at:
+          - Local: http://localhost:{{ app_port }}
+          - Public: http://{{ ansible_host }}:{{ app_port }}
